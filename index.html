@@ -24,12 +24,13 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+    <link rel="preconnect" href="https://huggingface.co" />
     <link rel="preconnect" href="https://en.wikipedia.org" />
     <link
       href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700;9..144,800&family=Sora:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=3" />
   </head>
   <body>
     <div class="grain" aria-hidden="true"></div>
@@ -55,9 +56,8 @@
         <p class="kicker">Camera stall · no signup · no card</p>
         <h1>Point at a thing.<br />I’ll name it. You decide.</h1>
         <p class="lede">
-          Hey — scan an object and I’ll say what it is, then ask
-          <em>what you want to do with it</em>. Sell it on a marketplace, see
-          what it goes for, or learn a little more.
+          Hey — point at a window, a door, a chair, anything in the frame.
+          I’ll name it, then ask <em>what you want to do with it</em>.
         </p>
       </div>
 
@@ -76,19 +76,13 @@
           </svg>
           Use a photo from the library
         </label>
-        <input
-          id="photo-input"
-          type="file"
-          accept="image/*"
-          capture="environment"
-          hidden
-        />
+        <input id="photo-input" type="file" accept="image/*" hidden />
       </div>
 
       <ul class="trust">
-        <li>Runs on your phone — the model loads from a free CDN, no paid API key.</li>
-        <li>iPhone Safari works over this HTTPS site. Allow the camera when asked.</li>
-        <li>Photos stay on this device unless you tap a marketplace yourself.</li>
+        <li>Names everyday things — windows, doors, furniture, gadgets — in the browser, free.</li>
+        <li>iPhone: open this HTTPS site in Safari, allow the camera, then tap the shutter.</li>
+        <li>First visit downloads the vision model. After that, scans are much faster.</li>
       </ul>
     </section>
 
@@ -100,12 +94,22 @@
     >
       <div class="stage">
         <video id="live" playsinline muted autoplay webkit-playsinline></video>
-        <canvas id="boxes" aria-hidden="true"></canvas>
-        <img id="still" alt="Captured frame" hidden />
+        <img id="still" alt="Captured frame" />
         <div class="reticle" aria-hidden="true">
           <span></span><span></span><span></span><span></span>
         </div>
-        <p class="live-chip" id="live-chip" hidden></p>
+        <p class="live-chip" id="live-chip">Fill the frame, then tap the shutter</p>
+        <div id="scan-overlay" class="scan-overlay hidden" role="status">
+          <span class="scan-pulse" aria-hidden="true"></span>
+          <p id="scan-overlay-text">Looking at this…</p>
+        </div>
+        <div id="cam-error" class="cam-error hidden" role="alert">
+          <p id="cam-error-text"></p>
+          <button class="primary" type="button" id="cam-retry">Turn camera on</button>
+        </div>
+        <button class="resume-cam" type="button" id="resume-camera" hidden>
+          Turn camera on again
+        </button>
 
         <header class="cam-bar">
           <button class="icon-btn" type="button" id="close-camera" aria-label="Close camera">
@@ -116,7 +120,7 @@
               />
             </svg>
           </button>
-          <p class="cam-title">Hold the object in the frame</p>
+          <p class="cam-title">Fill the frame with the object</p>
           <button class="icon-btn" type="button" id="toggle-torch" aria-label="Toggle flashlight" hidden>
             <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
               <path
@@ -139,7 +143,7 @@
             </span>
             <span>Library</span>
           </label>
-          <input id="photo-input-cam" type="file" accept="image/*" capture="environment" hidden />
+          <input id="photo-input-cam" type="file" accept="image/*" hidden />
 
           <button class="shutter" type="button" id="shutter" aria-label="Scan this object">
             <span class="shutter-inner"></span>
@@ -192,8 +196,6 @@
 
     <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
-    <script src="./app.js"></script>
+    <script type="module" src="./app.js?v=3"></script>
   </body>
 </html>

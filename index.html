@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- openlot-v6-glass -->
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -6,210 +7,101 @@
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
-    <meta name="theme-color" content="#161410" />
+    <meta name="theme-color" content="#1a1814" />
     <meta name="color-scheme" content="dark" />
     <meta
       name="description"
-      content="Point your phone at an object. Open Lot names it, then asks what you want to do — sell it, learn about it, or find another."
+      content="Point at a window. Count the glass panes. Add them to an invoice."
     />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Open Lot" />
-    <title>Open Lot — Scan it. Name it. Sell it.</title>
-    <link rel="canonical" href="./" />
+    <title>Open Lot — Window glass count</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="preconnect" href="https://cdn.jsdelivr.net" />
-    <link rel="preconnect" href="https://huggingface.co" />
-    <link rel="preconnect" href="https://en.wikipedia.org" />
     <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700;9..144,800&family=Sora:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Barlow:wght@500;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=5" />
+    <link rel="stylesheet" href="./styles.css?v=6" />
   </head>
   <body>
-    <div class="grain" aria-hidden="true"></div>
-
     <a class="skip" href="#home">Skip to content</a>
 
-    <section id="home" class="screen screen-home" data-screen="home">
+    <section id="home" class="screen screen-home">
       <header class="mast">
         <p class="mark">Open Lot</p>
-        <button class="text-btn" type="button" id="lots-open" aria-label="Open saved lots">
-          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-            <path
-              fill="currentColor"
-              d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v11a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17.5v-11Zm2.5-.5a.5.5 0 0 0-.5.5v11c0 .28.22.5.5.5h11a.5.5 0 0 0 .5-.5v-11a.5.5 0 0 0-.5-.5h-11ZM7 8h10v2H7V8Zm0 4h7v2H7v-2Z"
-            />
-          </svg>
-          <span>My lot</span>
-          <span class="count" id="lot-count" hidden>0</span>
+        <button class="text-btn" type="button" id="home-cart" aria-label="Open invoice list">
+          Cart
+          <span class="count" id="home-cart-count" hidden>0</span>
         </button>
       </header>
-
       <div class="hero">
-        <p class="kicker">Camera stall · no signup · no card</p>
-        <h1>Point at a thing.<br />I’ll name it. You decide.</h1>
+        <p class="kicker">Window glass count</p>
+        <h1>Point at a window.<br />I’ll count the glass.</h1>
         <p class="lede">
-          Hey — hold still on a door, a window, a fan, anything.
-          I’ll name it, then ask <em>what you want to do with it</em>.
+          Output looks like this:
+          <em>1 window with two glass</em>
         </p>
       </div>
-
       <div class="actions">
-        <button class="shutter-cta" type="button" id="start-camera" disabled>
+        <button class="shutter-cta" type="button" id="start-camera">
           <span class="shutter-ring" aria-hidden="true"></span>
           <span class="shutter-core" aria-hidden="true"></span>
-          <span class="shutter-label" id="start-label">Warming the lens…</span>
+          <span class="shutter-label">Open the camera</span>
         </button>
-        <label class="ghost-cta" for="photo-input">
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-            <path
-              fill="currentColor"
-              d="M4 7.5A2.5 2.5 0 0 1 6.5 5h2.1l.7-1.2A1.5 1.5 0 0 1 10.6 3h2.8a1.5 1.5 0 0 1 1.3.8L15.4 5h2.1A2.5 2.5 0 0 1 20 7.5v9A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5v-9ZM12 16.2A3.7 3.7 0 1 0 12 8.8a3.7 3.7 0 0 0 0 7.4Z"
-            />
-          </svg>
-          Use a photo from the library
-        </label>
+        <label class="ghost-cta" for="photo-input">Use a photo from the library</label>
         <input id="photo-input" type="file" accept="image/*" hidden />
       </div>
-
-      <ul class="trust">
-        <li>Describes what it sees — doors, windows, fans, furniture — using a free public model.</li>
-        <li>Hold still for a moment, or tap the white shutter. Then you’ll get an answer.</li>
-        <li>First visit downloads the model over Wi‑Fi. If it fails, tap Retry loading vision.</li>
-      </ul>
-      <p id="load-error" class="load-error" hidden></p>
-      <button class="ghost-cta" type="button" id="retry-vision">Retry loading vision</button>
     </section>
 
-    <section
-      id="camera"
-      class="screen screen-camera hidden"
-      data-screen="camera"
-      aria-label="Scanner"
-    >
+    <section id="camera" class="screen screen-camera hidden" aria-label="Window scanner">
       <div class="stage">
         <video id="live" playsinline muted autoplay webkit-playsinline></video>
-        <img id="still" alt="Captured frame" />
-        <div class="reticle" aria-hidden="true">
-          <span></span><span></span><span></span><span></span>
-        </div>
-        <p class="live-chip" id="live-chip">Hold still on the object, or tap the shutter</p>
-        <div id="scan-overlay" class="scan-overlay hidden" role="status">
-          <span class="scan-pulse" aria-hidden="true"></span>
-          <p id="scan-overlay-text">Looking at this…</p>
-        </div>
-        <div id="cam-error" class="cam-error hidden" role="alert">
-          <p id="cam-error-text"></p>
-          <button class="primary" type="button" id="cam-retry">Turn camera on</button>
-        </div>
-        <button class="resume-cam" type="button" id="resume-camera" hidden>
-          Turn camera on again
-        </button>
+        <canvas id="overlay" aria-hidden="true"></canvas>
+        <img id="still" alt="" />
 
-        <header class="cam-bar">
-          <button class="icon-btn" type="button" id="close-camera" aria-label="Close camera">
+        <header class="field-bar">
+          <button class="pill-btn" type="button" id="close-camera">Close</button>
+          <button class="cart-btn" type="button" id="cart-open" aria-label="Open cart">
             <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
               <path
                 fill="currentColor"
-                d="M6.3 6.3a1 1 0 0 1 1.4 0L12 10.58l4.3-4.3a1 1 0 1 1 1.4 1.42L13.42 12l4.3 4.3a1 1 0 0 1-1.42 1.4L12 13.42l-4.3 4.3a1 1 0 0 1-1.4-1.42L10.58 12l-4.3-4.3a1 1 0 0 1 0-1.4Z"
+                d="M7 4h-2l-1 2v2h2l3.6 7.59-1.35 2.41A1 1 0 0 0 9 19h10v-2H9.42l.93-1.63L17.55 9H8.21L7 4Zm3 16a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Zm8 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z"
               />
             </svg>
-          </button>
-          <p class="cam-title">Hold still, or tap the shutter</p>
-          <button class="icon-btn" type="button" id="toggle-torch" aria-label="Toggle flashlight" hidden>
-            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-              <path
-                fill="currentColor"
-                d="M9 2h6l1 7h-8L9 2Zm2 9h2v11l-4-6h3l-1-5Z"
-              />
-            </svg>
+            <span class="cart-badge" id="cart-badge" hidden>0</span>
           </button>
         </header>
 
-        <footer class="cam-dock">
-          <label class="dock-side" for="photo-input-cam">
-            <span class="dock-glyph" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="22" height="22">
-                <path
-                  fill="currentColor"
-                  d="M4 7.5A2.5 2.5 0 0 1 6.5 5h2.1l.7-1.2A1.5 1.5 0 0 1 10.6 3h2.8a1.5 1.5 0 0 1 1.3.8L15.4 5h2.1A2.5 2.5 0 0 1 20 7.5v9A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5v-9ZM12 16.2A3.7 3.7 0 1 0 12 8.8a3.7 3.7 0 0 0 0 7.4Z"
-                />
-              </svg>
-            </span>
-            <span>Library</span>
-          </label>
-          <input id="photo-input-cam" type="file" accept="image/*" hidden />
+        <div id="cam-error" class="cam-error hidden" role="alert">
+          <p id="cam-error-text"></p>
+          <button class="invoice-btn" type="button" id="cam-retry">Turn camera on</button>
+        </div>
 
-          <button class="shutter" type="button" id="shutter" aria-label="Scan this object">
-            <span class="shutter-inner"></span>
-          </button>
-
-          <button class="dock-side" type="button" id="flip-camera" aria-label="Switch camera">
-            <span class="dock-glyph" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="22" height="22">
-                <path
-                  fill="currentColor"
-                  d="M12 6a6 6 0 0 1 5.3 3.2H15v2h6V5h-2v2.1A8 8 0 0 0 4.2 9.1l1.8 1A6 6 0 0 1 12 6Zm7.8 8.9-1.8-1A6 6 0 0 1 6.7 14.8H9v-2H3v6h2v-2.1A8 8 0 0 0 19.8 14.9Z"
-                />
-              </svg>
-            </span>
-            <span>Flip</span>
-          </button>
+        <footer class="field-dock">
+          <p class="readout" id="readout">Aim at a window</p>
+          <button class="invoice-btn" type="button" id="add-invoice">Create invoice</button>
         </footer>
       </div>
     </section>
 
-    <section id="lots" class="screen screen-lots hidden" data-screen="lots">
+    <section id="invoice" class="screen screen-lots hidden">
       <header class="mast">
-        <button class="text-btn" type="button" id="lots-back">
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-            <path fill="currentColor" d="M14.7 5.3a1 1 0 0 1 0 1.4L10.42 11H20v2H10.42l4.28 4.3a1 1 0 1 1-1.42 1.4l-6-6a1 1 0 0 1 0-1.4l6-6a1 1 0 0 1 1.42 0Z" />
-          </svg>
-          Back
-        </button>
-        <p class="mark">My lot</p>
+        <button class="text-btn" type="button" id="invoice-back">Back</button>
+        <p class="mark">Invoice</p>
         <span class="mast-spacer"></span>
       </header>
-      <p class="lots-lead" id="lots-lead">Saved scans live only on this phone.</p>
-      <ul class="lot-list" id="lot-list"></ul>
+      <p class="lots-lead">Each line is one scanned window.</p>
+      <ul class="lot-list" id="invoice-list"></ul>
+      <button class="quiet" type="button" id="invoice-clear">Clear list</button>
     </section>
 
-    <div
-      class="sheet"
-      id="sheet"
-      hidden
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="sheet-title"
-    >
-      <div class="sheet-backdrop" id="sheet-backdrop"></div>
-      <div class="sheet-panel">
-        <div class="sheet-handle" aria-hidden="true"></div>
-        <div class="sheet-body" id="sheet-body"></div>
-      </div>
-    </div>
-
     <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-
-    <script>
-      if (navigator.serviceWorker) {
-        navigator.serviceWorker.getRegistrations().then(function (regs) {
-          regs.forEach(function (reg) { reg.unregister(); });
-        });
-      }
-      if (window.caches) {
-        caches.keys().then(function (keys) {
-          keys.forEach(function (key) { caches.delete(key); });
-        });
-      }
-    </script>
-    <script type="module" src="./app.js?v=5"></script>
+    <script type="module" src="./app.js?v=6"></script>
   </body>
 </html>

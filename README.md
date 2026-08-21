@@ -1,9 +1,11 @@
-# Open Lot
+# Open Lot — window glass count
 
-## iPhone link (use this)
+Point the camera at a window. The app counts the glass panes and says:
 
-**https://vusunuriyev.github.io/item-scanner-web-app/scan.html?v=5**
+**1 window with two glass**
 
-Wait until the button says **Open the camera**. The first visit downloads a public caption model over Wi‑Fi.
+## iPhone (Safari)
 
-If you see **Could not load vision**, pull to refresh this `scan.html?v=5` link, then tap **Retry loading vision**.
+**https://vusunuriyev.github.io/item-scanner-web-app/scan.html?v=6**
+
+Hold the window in the frame. Yellow box = window. Numbers = each glass. Tap **Create invoice** to save that count.

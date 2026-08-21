@@ -2,7 +2,7 @@
   "name": "Open Lot — Item Scanner",
   "short_name": "Open Lot",
   "description": "Scan an object, name it, then sell it, learn about it, or find another.",
-  "start_url": "./",
+  "start_url": "./scan.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",

@@ -1,5 +1,5 @@
 import { pipeline, env } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.2";
-import { BROAD_LABELS, REFINE, GENERIC_LABELS } from "./labels.js?v=3";
+import { NAME_HINTS } from "./labels.js?v=4";
 
 env.allowLocalModels = false;
 env.useBrowserCache = true;
@@ -32,6 +32,12 @@ const WIKI_ALIASES = {
   "computer monitor": "Computer monitor",
   window: "Window",
   door: "Door",
+  fan: "Fan (machine)",
+  "pedestal fan": "Fan (machine)",
+  "ceiling fan": "Ceiling fan",
+  suitcase: "Suitcase",
+  chandelier: "Chandelier",
+  bowl: "Bowl",
   "sliding glass door": "Sliding glass door",
   "garage door": "Garage door",
   curtain: "Curtain",
@@ -68,12 +74,14 @@ const els = {
 };
 
 const state = {
-  classifier: null,
+  captioner: null,
   stream: null,
   facingMode: "environment",
   torchOn: false,
   scanning: false,
   startingCamera: false,
+  autoArmed: true,
+  motionLoop: 0,
   frame: null,
   lastFocus: null,
 };
@@ -215,16 +223,12 @@ async function loadModel() {
       els.startLabel.textContent = "Almost ready…";
     }
   };
-  const modelId = "Xenova/clip-vit-base-patch32";
-  const attempts = [
-    { dtype: "q8" },
-    { dtype: "q8", device: "wasm" },
-    { device: "wasm" },
-  ];
+  const modelId = "Xenova/blip-image-captioning-base";
+  const attempts = [{ dtype: "q8" }, { dtype: "q8", device: "wasm" }, { device: "wasm" }];
   let lastError;
   for (const extra of attempts) {
     try {
-      state.classifier = await pipeline("zero-shot-image-classification", modelId, {
+      state.captioner = await pipeline("image-to-text", modelId, {
         progress_callback: onProgress,
         ...extra,
       });
@@ -235,22 +239,7 @@ async function loadModel() {
       console.warn(err);
     }
   }
-  if (!state.classifier) throw lastError || new Error("Could not load CLIP");
-  els.startLabel.textContent = "Calibrating…";
-  try {
-    const boot = document.createElement("canvas");
-    boot.width = 224;
-    boot.height = 224;
-    const bootUrl = await canvasToObjectUrl(boot);
-    await withTimeout(
-      state.classifier(bootUrl, BROAD_LABELS, { hypothesis_template: "a photo of a {}" }),
-      20000,
-      "warmup"
-    );
-    URL.revokeObjectURL(bootUrl);
-  } catch (warmErr) {
-    console.warn(warmErr);
-  }
+  if (!state.captioner) throw lastError || new Error("Could not load captioner");
   els.start.disabled = false;
   els.startLabel.textContent = "Open the camera";
 }
@@ -297,7 +286,8 @@ async function startCamera() {
   setStill(false);
   hideScanOverlay();
   els.liveChip.hidden = false;
-  els.liveChip.textContent = "Fill the frame, then tap the shutter";
+  els.liveChip.textContent = "Hold still on the object, or tap the shutter";
+  state.autoArmed = true;
 
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     showCamError("This browser cannot open a live camera. Use a photo from your library instead.");
@@ -311,6 +301,7 @@ async function startCamera() {
     if (hadStream) await delay(350);
     await openCameraStream();
     hideCamError();
+    startMotionWatch();
   } catch (err) {
     console.error(err);
     const denied = /not allowed|permission|denied|NotAllowedError/i.test(String(err && err.name) + String(err));
@@ -321,6 +312,7 @@ async function startCamera() {
       try {
         await openCameraStream();
         hideCamError();
+        startMotionWatch();
         state.startingCamera = false;
         return;
       } catch (retryErr) {
@@ -350,7 +342,9 @@ async function resumeLiveCamera() {
     try {
       await els.live.play();
       els.liveChip.hidden = false;
-      els.liveChip.textContent = "Fill the frame, then tap the shutter";
+      els.liveChip.textContent = "Hold still on the object, or tap the shutter";
+      state.autoArmed = true;
+      startMotionWatch();
       return;
     } catch (err) {
       console.warn(err);
@@ -423,54 +417,122 @@ function canvasToObjectUrl(canvas) {
   });
 }
 
-function preferSpecific(ranked) {
-  if (!ranked.length) return ranked;
-  const top = ranked[0];
-  const next = ranked[1];
-  if (next && GENERIC_LABELS.has(top.label) && top.score - next.score < 0.1) {
-    return [next, top, ...ranked.slice(2)];
+function sampleHash(video) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 24;
+  canvas.height = 24;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  ctx.drawImage(video, 0, 0, 24, 24);
+  const data = ctx.getImageData(0, 0, 24, 24).data;
+  const out = new Uint8Array(24 * 24);
+  for (let i = 0; i < out.length; i += 1) {
+    const j = i * 4;
+    out[i] = (data[j] + data[j + 1] + data[j + 2]) / 3;
   }
-  return ranked;
+  return out;
 }
 
-async function classifyUrl(url, labels) {
-  const raw = await state.classifier(url, labels, {
-    hypothesis_template: "a photo of a {}",
-  });
-  return (raw || []).map((row) => ({
-    class: row.label,
-    label: row.label,
-    score: row.score,
-  }));
+function hashDistance(a, b) {
+  let sum = 0;
+  for (let i = 0; i < a.length; i += 1) sum += Math.abs(a[i] - b[i]);
+  return sum / a.length;
+}
+
+function startMotionWatch() {
+  if (state.motionLoop) cancelAnimationFrame(state.motionLoop);
+  let lastHash = null;
+  let stillSince = 0;
+  let lastRun = 0;
+  const tick = (now) => {
+    state.motionLoop = requestAnimationFrame(tick);
+    if (state.scanning || !els.sheet.hidden || els.still.classList.contains("is-on")) return;
+    if (!tracksLive() || els.live.readyState < 2) return;
+    if (now - lastRun < 300) return;
+    lastRun = now;
+    const hash = sampleHash(els.live);
+    const moved = lastHash && hashDistance(hash, lastHash) > 14;
+    lastHash = hash;
+    if (moved) {
+      stillSince = now;
+      els.liveChip.hidden = false;
+      els.liveChip.textContent = "Hold still on the object, or tap the shutter";
+      return;
+    }
+    if (!stillSince) stillSince = now;
+    const held = now - stillSince;
+    if (held > 400 && held < 900) {
+      els.liveChip.textContent = "Hold still — naming this…";
+    }
+    if (held > 900 && state.autoArmed && state.captioner) {
+      state.autoArmed = false;
+      shutter();
+    }
+  };
+  state.motionLoop = requestAnimationFrame(tick);
+}
+
+function cleanCaption(raw) {
+  let text = String(raw || "")
+    .replace(/\s+/g, " ")
+    .replace(/^caption:\s*/i, "")
+    .replace(/\.$/, "")
+    .trim();
+  if (!text) return "";
+  text = text.replace(/^there is /i, "").replace(/^this is /i, "").replace(/^it is /i, "");
+  return text;
+}
+
+function readCaption(out) {
+  if (!out) return "";
+  const row = Array.isArray(out) ? out[0] : out;
+  if (!row) return "";
+  if (typeof row === "string") return cleanCaption(row);
+  return cleanCaption(row.generated_text || row.caption || "");
+}
+
+function itemFromCaption(caption) {
+  const lower = caption.toLowerCase();
+  for (const hint of NAME_HINTS) {
+    if (lower.includes(hint)) return hint;
+  }
+  const words = lower.replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((w) => w.length > 3);
+  return words[0] || caption;
+}
+
+function altsFromCaption(caption, main) {
+  const lower = caption.toLowerCase();
+  return NAME_HINTS.filter((hint) => hint !== main && lower.includes(hint)).slice(0, 4);
+}
+
+function spokenLine(caption) {
+  let c = cleanCaption(caption);
+  if (!c) return "Hey, I see something here. What do you want to do with it?";
+  if (!/^(a|an|the)\s/i.test(c)) c = `${article(c)} ${c}`;
+  return `Hey, this is ${c}. What do you want to do with it?`;
+}
+
+async function captionCanvas(canvas) {
+  const tight = centerCrop(canvas, 0.82);
+  const url = await canvasToObjectUrl(tight);
+  try {
+    const out = await state.captioner(url, { max_new_tokens: 24 });
+    return readCaption(out);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 async function identify(canvas) {
-  const tight = centerCrop(canvas, 0.7);
-  const tightUrl = await canvasToObjectUrl(tight);
-  try {
-    let ranked = preferSpecific(await classifyUrl(tightUrl, BROAD_LABELS));
-    const head = ranked[0];
-    const shouldRefine =
-      head &&
-      (head.label === "window" ||
-        head.label === "door" ||
-        head.label === "sliding glass door" ||
-        head.label === "garage door");
-    const refineLabels = shouldRefine ? REFINE[head.label] : null;
-    if (refineLabels && refineLabels.length) {
-      const refined = preferSpecific(await classifyUrl(tightUrl, refineLabels));
-      if (refined[0]) {
-        ranked = [
-          refined[0],
-          ...refined.slice(1),
-          ...ranked.filter((row) => row.label !== refined[0].label),
-        ];
-      }
-    }
-    return ranked;
-  } finally {
-    URL.revokeObjectURL(tightUrl);
-  }
+  const caption = await captionCanvas(canvas);
+  if (!caption) return [];
+  const name = itemFromCaption(caption);
+  const alts = altsFromCaption(caption, name).map((label) => ({
+    class: label,
+    label,
+    score: 0.4,
+    caption,
+  }));
+  return [{ class: name, label: name, score: 0.92, caption }, ...alts];
 }
 
 function captureStillFromVideo() {
@@ -481,13 +543,13 @@ function captureStillFromVideo() {
 }
 
 async function scanFromCanvas(canvas, dataUrl) {
-  if (!state.classifier) {
+  if (!state.captioner) {
     toast("The scanner is still loading. Give it a moment.");
     return;
   }
   state.scanning = true;
   els.shutter.classList.add("busy");
-  showScanOverlay("Looking at this…");
+  showScanOverlay("Naming this…");
   try {
     const detectCanvas = drawScaled(canvas, 384);
     const ranked = await withTimeout(identify(detectCanvas), 28000, "scan-timeout");
@@ -637,30 +699,25 @@ function closeSheet(resumeAfter) {
   if (resumeAfter) resumeLiveCamera();
 }
 
-function resultCopy(name, score, runnerUp) {
-  const item = pretty(name);
-  const lead = score - (runnerUp || 0);
-  if (lead >= 0.03 || score >= 0.12) {
-    return `Hey, this is ${article(name)} ${item}. What do you want to do with it?`;
-  }
-  return `Hey, this looks like ${article(name)} ${item}. What do you want to do with it?`;
+function resultCopy(top) {
+  return spokenLine(top && (top.caption || top.class || top.label));
 }
 
 async function openResultSheet(top, all, dataUrl) {
-  const wiki = await fetchWiki(top.class || top.label);
   const name = top.class || top.label;
-  const runnerUp = all && all[1] ? all[1].score : 0;
-  const intro = resultCopy(name, top.score || 0, runnerUp);
+  const wiki = await fetchWiki(name);
+  const intro = resultCopy(top);
   const canSell = !NOT_FOR_SALE.has(name) && !NOT_FOR_SALE.has(name.split(" ")[0]);
   const others = (all || []).filter((p) => (p.class || p.label) !== name).slice(0, 4);
   const extract = wiki && wiki.extract ? wiki.extract : "";
+  const captionNote = top.caption ? escapeHtml(top.caption) : "";
   openSheet(`
       <div class="result-hero">
         <img src="${dataUrl}" alt="Scanned ${escapeHtml(pretty(name))}" />
         <div>
           <p class="sheet-kicker">Scanned</p>
           <h2 id="sheet-title" tabindex="-1">${escapeHtml(intro)}</h2>
-          <p class="confidence">${Math.round((top.score || 0) * 100)}% match${wiki && wiki.title ? ` · ${escapeHtml(wiki.title)}` : ""}</p>
+          <p class="confidence">${captionNote ? captionNote : "Named from the photo"}${wiki && wiki.title ? ` · ${escapeHtml(wiki.title)}` : ""}</p>
         </div>
       </div>
       ${extract ? `<p class="sheet-extract">${escapeHtml(extract)}</p>` : ""}
@@ -821,10 +878,14 @@ async function reopenLot(id) {
   if (!lot) return;
   showScreen("camera");
   setStill(true, lot.image);
-  await openResultSheet({ class: lot.name, score: 1 }, [], lot.image);
+  await openResultSheet({ class: lot.name, score: 1, caption: lot.name }, [], lot.image);
 }
 
 function closeCamera() {
+  if (state.motionLoop) {
+    cancelAnimationFrame(state.motionLoop);
+    state.motionLoop = 0;
+  }
   closeSheet(false);
   hideScanOverlay();
   hideCamError();
@@ -837,7 +898,7 @@ async function applyTypedName(form) {
   const input = form.querySelector("#manual-name");
   const name = (input && input.value ? input.value : "").trim().toLowerCase();
   if (!name) return;
-  await openResultSheet({ class: name, score: 1 }, [], els.sheetBody.dataset.image);
+  await openResultSheet({ class: name, score: 1, caption: name }, [], els.sheetBody.dataset.image);
 }
 
 els.start.addEventListener("click", startCamera);
@@ -874,7 +935,9 @@ els.sheetBody.addEventListener("click", async (event) => {
       ((state.frame && state.frame.predictions) || []).find((p) => (p.class || p.label) === name) || {
         class: name,
         score: 0.5,
+        caption: name,
       };
+    if (!pred.caption) pred.caption = pred.class || name;
     await openResultSheet(pred, (state.frame && state.frame.predictions) || [], els.sheetBody.dataset.image);
     return;
   }
@@ -949,5 +1012,12 @@ loadModel().catch((err) => {
 });
 
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./sw.js").catch(() => {});
+  navigator.serviceWorker.getRegistrations().then((regs) => {
+    for (const reg of regs) reg.unregister();
+  });
+  if (window.caches) {
+    caches.keys().then((keys) => {
+      for (const key of keys) caches.delete(key);
+    });
+  }
 }

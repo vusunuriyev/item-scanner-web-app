@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#161410" />
+    <meta name="color-scheme" content="dark" />
+    <meta
+      name="description"
+      content="Point your phone at an object. Open Lot names it, then asks what you want to do — sell it, learn about it, or find another."
+    />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Open Lot" />
+    <title>Open Lot — Scan it. Name it. Sell it.</title>
+    <link rel="canonical" href="./" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+    <link rel="preconnect" href="https://en.wikipedia.org" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700;9..144,800&family=Sora:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="grain" aria-hidden="true"></div>
+
+    <a class="skip" href="#home">Skip to content</a>
+
+    <section id="home" class="screen screen-home" data-screen="home">
+      <header class="mast">
+        <p class="mark">Open Lot</p>
+        <button class="text-btn" type="button" id="lots-open" aria-label="Open saved lots">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+            <path
+              fill="currentColor"
+              d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v11a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17.5v-11Zm2.5-.5a.5.5 0 0 0-.5.5v11c0 .28.22.5.5.5h11a.5.5 0 0 0 .5-.5v-11a.5.5 0 0 0-.5-.5h-11ZM7 8h10v2H7V8Zm0 4h7v2H7v-2Z"
+            />
+          </svg>
+          <span>My lot</span>
+          <span class="count" id="lot-count" hidden>0</span>
+        </button>
+      </header>
+
+      <div class="hero">
+        <p class="kicker">Camera stall · no signup · no card</p>
+        <h1>Point at a thing.<br />I’ll name it. You decide.</h1>
+        <p class="lede">
+          Hey — scan an object and I’ll say what it is, then ask
+          <em>what you want to do with it</em>. Sell it on a marketplace, see
+          what it goes for, or learn a little more.
+        </p>
+      </div>
+
+      <div class="actions">
+        <button class="shutter-cta" type="button" id="start-camera" disabled>
+          <span class="shutter-ring" aria-hidden="true"></span>
+          <span class="shutter-core" aria-hidden="true"></span>
+          <span class="shutter-label" id="start-label">Warming the lens…</span>
+        </button>
+        <label class="ghost-cta" for="photo-input">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+            <path
+              fill="currentColor"
+              d="M4 7.5A2.5 2.5 0 0 1 6.5 5h2.1l.7-1.2A1.5 1.5 0 0 1 10.6 3h2.8a1.5 1.5 0 0 1 1.3.8L15.4 5h2.1A2.5 2.5 0 0 1 20 7.5v9A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5v-9ZM12 16.2A3.7 3.7 0 1 0 12 8.8a3.7 3.7 0 0 0 0 7.4Z"
+            />
+          </svg>
+          Use a photo from the library
+        </label>
+        <input
+          id="photo-input"
+          type="file"
+          accept="image/*"
+          capture="environment"
+          hidden
+        />
+      </div>
+
+      <ul class="trust">
+        <li>Runs on your phone — the model loads from a free CDN, no paid API key.</li>
+        <li>iPhone Safari works over this HTTPS site. Allow the camera when asked.</li>
+        <li>Photos stay on this device unless you tap a marketplace yourself.</li>
+      </ul>
+    </section>
+
+    <section
+      id="camera"
+      class="screen screen-camera hidden"
+      data-screen="camera"
+      aria-label="Scanner"
+    >
+      <div class="stage">
+        <video id="live" playsinline muted autoplay webkit-playsinline></video>
+        <canvas id="boxes" aria-hidden="true"></canvas>
+        <img id="still" alt="Captured frame" hidden />
+        <div class="reticle" aria-hidden="true">
+          <span></span><span></span><span></span><span></span>
+        </div>
+        <p class="live-chip" id="live-chip" hidden></p>
+
+        <header class="cam-bar">
+          <button class="icon-btn" type="button" id="close-camera" aria-label="Close camera">
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M6.3 6.3a1 1 0 0 1 1.4 0L12 10.58l4.3-4.3a1 1 0 1 1 1.4 1.42L13.42 12l4.3 4.3a1 1 0 0 1-1.42 1.4L12 13.42l-4.3 4.3a1 1 0 0 1-1.4-1.42L10.58 12l-4.3-4.3a1 1 0 0 1 0-1.4Z"
+              />
+            </svg>
+          </button>
+          <p class="cam-title">Hold the object in the frame</p>
+          <button class="icon-btn" type="button" id="toggle-torch" aria-label="Toggle flashlight" hidden>
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M9 2h6l1 7h-8L9 2Zm2 9h2v11l-4-6h3l-1-5Z"
+              />
+            </svg>
+          </button>
+        </header>
+
+        <footer class="cam-dock">
+          <label class="dock-side" for="photo-input-cam">
+            <span class="dock-glyph" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="22" height="22">
+                <path
+                  fill="currentColor"
+                  d="M4 7.5A2.5 2.5 0 0 1 6.5 5h2.1l.7-1.2A1.5 1.5 0 0 1 10.6 3h2.8a1.5 1.5 0 0 1 1.3.8L15.4 5h2.1A2.5 2.5 0 0 1 20 7.5v9A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5v-9ZM12 16.2A3.7 3.7 0 1 0 12 8.8a3.7 3.7 0 0 0 0 7.4Z"
+                />
+              </svg>
+            </span>
+            <span>Library</span>
+          </label>
+          <input id="photo-input-cam" type="file" accept="image/*" capture="environment" hidden />
+
+          <button class="shutter" type="button" id="shutter" aria-label="Scan this object">
+            <span class="shutter-inner"></span>
+          </button>
+
+          <button class="dock-side" type="button" id="flip-camera" aria-label="Switch camera">
+            <span class="dock-glyph" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="22" height="22">
+                <path
+                  fill="currentColor"
+                  d="M12 6a6 6 0 0 1 5.3 3.2H15v2h6V5h-2v2.1A8 8 0 0 0 4.2 9.1l1.8 1A6 6 0 0 1 12 6Zm7.8 8.9-1.8-1A6 6 0 0 1 6.7 14.8H9v-2H3v6h2v-2.1A8 8 0 0 0 19.8 14.9Z"
+                />
+              </svg>
+            </span>
+            <span>Flip</span>
+          </button>
+        </footer>
+      </div>
+    </section>
+
+    <section id="lots" class="screen screen-lots hidden" data-screen="lots">
+      <header class="mast">
+        <button class="text-btn" type="button" id="lots-back">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+            <path fill="currentColor" d="M14.7 5.3a1 1 0 0 1 0 1.4L10.42 11H20v2H10.42l4.28 4.3a1 1 0 1 1-1.42 1.4l-6-6a1 1 0 0 1 0-1.4l6-6a1 1 0 0 1 1.42 0Z" />
+          </svg>
+          Back
+        </button>
+        <p class="mark">My lot</p>
+        <span class="mast-spacer"></span>
+      </header>
+      <p class="lots-lead" id="lots-lead">Saved scans live only on this phone.</p>
+      <ul class="lot-list" id="lot-list"></ul>
+    </section>
+
+    <div
+      class="sheet"
+      id="sheet"
+      hidden
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="sheet-title"
+    >
+      <div class="sheet-backdrop" id="sheet-backdrop"></div>
+      <div class="sheet-panel">
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <div class="sheet-body" id="sheet-body"></div>
+      </div>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>

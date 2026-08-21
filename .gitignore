@@ -1,0 +1,8 @@
+.DS_Store
+node_modules/
+.vercel
+.netlify
+*.log
+.cache/
+.env
+.env.*

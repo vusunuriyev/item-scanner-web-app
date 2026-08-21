@@ -6,6 +6,6 @@ Point the camera at a window. The app counts the glass panes and says:
 
 ## iPhone (Safari)
 
-**https://vusunuriyev.github.io/item-scanner-web-app/scan.html?v=6**
+**https://vusunuriyev.github.io/item-scanner-web-app/scan.html?v=7**
 
-Hold the window in the frame. Yellow box = window. Numbers = each glass. Tap **Create invoice** to save that count.
+Hold the windows in the frame — one, two, or three, side by side or stacked. The app counts every glass.

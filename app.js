@@ -1,4 +1,4 @@
-import { detectWindowGlasses, describeDetection } from "./detector.js?v=6";
+import { detectWindowGlasses, describeDetection } from "./detector.js?v=7";
 
 const STORAGE_KEY = "openlot-windows-v1";
 
@@ -32,7 +32,7 @@ const state = {
   facingMode: "environment",
   starting: false,
   loop: 0,
-  last: { windows: 0, glasses: 0, window: null, panes: [] },
+  last: { windows: 0, glasses: 0, window: null, windowBoxes: [], panes: [] },
   work: document.createElement("canvas"),
 };
 
@@ -178,15 +178,18 @@ function drawOverlay(result, srcW, srcH) {
   canvas.height = Math.round(rect.height * dpr);
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  if (!result.window || !result.panes.length) return;
+  if (!result.panes || !result.panes.length) return;
 
-  const win = mapRect(result.window, srcW, srcH, canvas.width, canvas.height);
+  const boxes = result.windowBoxes && result.windowBoxes.length ? result.windowBoxes : result.window ? [result.window] : [];
   ctx.strokeStyle = "rgba(232, 197, 71, 0.95)";
   ctx.lineWidth = 3 * dpr;
-  ctx.beginPath();
-  if (ctx.roundRect) ctx.roundRect(win.x, win.y, win.w, win.h, 10 * dpr);
-  else ctx.rect(win.x, win.y, win.w, win.h);
-  ctx.stroke();
+  for (const windowBox of boxes) {
+    const win = mapRect(windowBox, srcW, srcH, canvas.width, canvas.height);
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(win.x, win.y, win.w, win.h, 10 * dpr);
+    else ctx.rect(win.x, win.y, win.w, win.h);
+    ctx.stroke();
+  }
 
   result.panes.forEach((pane, i) => {
     const p = mapRect(pane, srcW, srcH, canvas.width, canvas.height);
@@ -213,7 +216,7 @@ function sampleFrame() {
   const w = video.videoWidth;
   const h = video.videoHeight;
   if (!w || !h) return null;
-  const maxEdge = 320;
+  const maxEdge = 420;
   const scale = Math.min(1, maxEdge / Math.max(w, h));
   const cw = Math.max(1, Math.round(w * scale));
   const ch = Math.max(1, Math.round(h * scale));
@@ -290,7 +293,7 @@ async function scanFile(file) {
   const img = new Image();
   img.onload = () => {
     showScreen("camera");
-    const maxEdge = 320;
+    const maxEdge = 420;
     const scale = Math.min(1, maxEdge / Math.max(img.naturalWidth, img.naturalHeight));
     const cw = Math.max(1, Math.round(img.naturalWidth * scale));
     const ch = Math.max(1, Math.round(img.naturalHeight * scale));

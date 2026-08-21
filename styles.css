@@ -280,8 +280,11 @@ button {
   font-size: 0.86rem;
 }
 
-.trust li + li {
-  margin-top: 8px;
+.load-error {
+  margin: 16px 0 0;
+  color: #e7b7a3;
+  font-size: 0.9rem;
+  max-width: 32rem;
 }
 
 .screen-camera {

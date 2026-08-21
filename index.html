@@ -30,7 +30,7 @@
       href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700;9..144,800&family=Sora:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=4" />
+    <link rel="stylesheet" href="./styles.css?v=5" />
   </head>
   <body>
     <div class="grain" aria-hidden="true"></div>
@@ -80,10 +80,12 @@
       </div>
 
       <ul class="trust">
-        <li>Describes what it sees — doors, windows, fans, furniture — not a short object list.</li>
+        <li>Describes what it sees — doors, windows, fans, furniture — using a free public model.</li>
         <li>Hold still for a moment, or tap the white shutter. Then you’ll get an answer.</li>
-        <li>First visit downloads a free vision model. Use a strong Wi‑Fi connection.</li>
+        <li>First visit downloads the model over Wi‑Fi. If it fails, tap Retry loading vision.</li>
       </ul>
+      <p id="load-error" class="load-error" hidden></p>
+      <button class="ghost-cta" type="button" id="retry-vision">Retry loading vision</button>
     </section>
 
     <section
@@ -208,6 +210,6 @@
         });
       }
     </script>
-    <script type="module" src="./app.js?v=4"></script>
+    <script type="module" src="./app.js?v=5"></script>
   </body>
 </html>

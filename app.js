@@ -1,5 +1,5 @@
-import { pipeline, env } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.2";
-import { NAME_HINTS } from "./labels.js?v=4";
+import { pipeline, env } from "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/+esm";
+import { NAME_HINTS } from "./labels.js?v=5";
 
 env.allowLocalModels = false;
 env.useBrowserCache = true;
@@ -71,10 +71,14 @@ const els = {
   lotList: document.getElementById("lot-list"),
   photo: document.getElementById("photo-input"),
   photoCam: document.getElementById("photo-input-cam"),
+  loadError: document.getElementById("load-error"),
+  retryVision: document.getElementById("retry-vision"),
 };
 
 const state = {
   captioner: null,
+  classifier: null,
+  visionMode: null,
   stream: null,
   facingMode: "environment",
   torchOn: false,
@@ -212,36 +216,99 @@ function stopStream() {
   els.live.srcObject = null;
 }
 
+function setLoadError(message) {
+  if (!els.loadError) return;
+  if (!message) {
+    els.loadError.hidden = true;
+    els.loadError.textContent = "";
+    return;
+  }
+  els.loadError.hidden = false;
+  els.loadError.textContent = message;
+}
+
+function tuneWasmForPhone() {
+  env.allowLocalModels = false;
+  env.useBrowserCache = true;
+  try {
+    env.backends.onnx.wasm.numThreads = 1;
+  } catch {
+    /* older builds */
+  }
+}
+
+function progressLabel(info) {
+  if (!info) return null;
+  if (info.status === "progress") {
+    let pct = Number(info.progress);
+    if (!Number.isFinite(pct)) {
+      if (info.loaded && info.total) pct = (100 * info.loaded) / info.total;
+      else return "Loading vision…";
+    }
+    if (pct <= 1) pct *= 100;
+    return `Loading vision… ${Math.max(0, Math.min(99, Math.round(pct)))}%`;
+  }
+  if (info.status === "initiate") return "Starting download…";
+  if (info.status === "download") return "Downloading vision…";
+  if (info.status === "done" || info.status === "ready") return "Almost ready…";
+  return null;
+}
+
+async function loadPipeline(task, modelId, onProgress) {
+  return pipeline(task, modelId, {
+    quantized: true,
+    progress_callback: (info) => {
+      const label = progressLabel(info);
+      if (label) els.startLabel.textContent = label;
+      if (onProgress) onProgress(info);
+    },
+  });
+}
+
 async function loadModel() {
   els.start.disabled = true;
-  els.startLabel.textContent = "Loading vision… 0%";
-  const onProgress = (info) => {
-    if (!info) return;
-    if (info.status === "progress" && typeof info.progress === "number") {
-      els.startLabel.textContent = `Loading vision… ${Math.max(0, Math.min(99, Math.round(info.progress)))}%`;
-    } else if (info.status === "ready" || info.status === "done") {
-      els.startLabel.textContent = "Almost ready…";
-    }
-  };
-  const modelId = "Xenova/blip-image-captioning-base";
-  const attempts = [{ dtype: "q8" }, { dtype: "q8", device: "wasm" }, { device: "wasm" }];
+  setLoadError("");
+  els.startLabel.textContent = "Loading vision…";
+  tuneWasmForPhone();
   let lastError;
-  for (const extra of attempts) {
+
+  try {
+    state.captioner = await loadPipeline("image-to-text", "Xenova/vit-gpt2-image-captioning");
+    state.visionMode = "caption";
+  } catch (err) {
+    lastError = err;
+    console.warn(err);
+    state.captioner = null;
+  }
+
+  if (!state.captioner) {
+    els.startLabel.textContent = "Trying a second model…";
     try {
-      state.captioner = await pipeline("image-to-text", modelId, {
-        progress_callback: onProgress,
-        ...extra,
-      });
-      lastError = null;
-      break;
+      state.classifier = await loadPipeline(
+        "zero-shot-image-classification",
+        "Xenova/clip-vit-base-patch32"
+      );
+      state.visionMode = "clip";
     } catch (err) {
       lastError = err;
       console.warn(err);
+      state.classifier = null;
     }
   }
-  if (!state.captioner) throw lastError || new Error("Could not load captioner");
+
+  if (!state.captioner && !state.classifier) {
+    const detail = lastError && (lastError.message || String(lastError));
+    setLoadError(detail ? `Vision failed: ${detail}` : "Vision failed to load.");
+    els.start.disabled = false;
+    els.startLabel.textContent = "Open camera anyway";
+    state.visionMode = "manual";
+    toast("Vision did not load. You can still take a photo and type the name.");
+    return;
+  }
+
   els.start.disabled = false;
   els.startLabel.textContent = "Open the camera";
+  setLoadError("");
 }
 
 async function openCameraStream() {
@@ -463,7 +530,7 @@ function startMotionWatch() {
     if (held > 400 && held < 900) {
       els.liveChip.textContent = "Hold still — naming this…";
     }
-    if (held > 900 && state.autoArmed && state.captioner) {
+  if (held > 900 && state.autoArmed && (state.captioner || state.classifier)) {
       state.autoArmed = false;
       shutter();
     }
@@ -515,14 +582,37 @@ async function captionCanvas(canvas) {
   const tight = centerCrop(canvas, 0.82);
   const url = await canvasToObjectUrl(tight);
   try {
-    const out = await state.captioner(url, { max_new_tokens: 24 });
-    return readCaption(out);
+    if (state.captioner) {
+      const out = await state.captioner(url);
+      return readCaption(out);
+    }
+    if (state.classifier) {
+      const raw = await state.classifier(url, NAME_HINTS);
+      const top = (raw || [])[0];
+      return top && top.label ? top.label : "";
+    }
+    return "";
   } finally {
     URL.revokeObjectURL(url);
   }
 }
 
 async function identify(canvas) {
+  if (state.classifier && !state.captioner) {
+    const tight = centerCrop(canvas, 0.82);
+    const url = await canvasToObjectUrl(tight);
+    try {
+      const raw = await state.classifier(url, NAME_HINTS);
+      return (raw || []).map((row) => ({
+        class: row.label,
+        label: row.label,
+        score: row.score,
+        caption: row.label,
+      }));
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
   const caption = await captionCanvas(canvas);
   if (!caption) return [];
   const name = itemFromCaption(caption);
@@ -543,8 +633,8 @@ function captureStillFromVideo() {
 }
 
 async function scanFromCanvas(canvas, dataUrl) {
-  if (!state.captioner) {
-    toast("The scanner is still loading. Give it a moment.");
+  if (!state.captioner && !state.classifier) {
+    openUnknownSheet(dataUrl, "Vision is not loaded. Type the name of what you see.");
     return;
   }
   state.scanning = true;
@@ -1004,11 +1094,20 @@ document.addEventListener("keydown", (event) => {
 });
 
 refreshLotCount();
+if (els.retryVision) {
+  els.retryVision.addEventListener("click", () => {
+    loadModel().catch((err) => {
+      console.error(err);
+      setLoadError(err && err.message ? err.message : String(err));
+    });
+  });
+}
 loadModel().catch((err) => {
   console.error(err);
-  els.start.disabled = true;
-  els.startLabel.textContent = "Could not load vision";
-  toast("Vision model did not load. Check your connection and refresh.");
+  setLoadError(err && err.message ? err.message : String(err));
+  els.start.disabled = false;
+  els.startLabel.textContent = "Open camera anyway";
+  state.visionMode = "manual";
 });
 
 if ("serviceWorker" in navigator) {
